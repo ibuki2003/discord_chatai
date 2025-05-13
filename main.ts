@@ -158,7 +158,7 @@ bot.events.messageCreate = async (message) => {
   const ai = getAi(message.guildId?.toString(), message.channelId.toString());
 
   // show typing indicator
-  await bot.helpers.triggerTypingIndicator(message.channelId);
+  // await bot.helpers.triggerTypingIndicator(message.channelId);
 
   const resp_content = await ai.getResponse(await getChannelHistory(message.channelId.toString(), bot));
 

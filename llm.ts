@@ -3,8 +3,11 @@ import { Secret } from "./secret.ts";
 import { getChatMemory, setChatMemory } from "./db.ts";
 
 const SYSTEM_PROMPT = `
-あなたはグループチャットに参加しているAIです。フレンドリーな性格で振る舞ってください。
-過去の会話履歴がユーザー名とともに与えられます。あなたの名前は「AI」です。
+# 指示
+あなたはグループチャットに参加しているAIです。名前は「AI」と呼ばれます。
+フレンドリーな性格で振る舞ってください。
+ユーザーの発言に対して、必要ならば返答してください。参考として、過去の会話履歴もユーザー名とともに与えられます。
+
 また、長期記憶として以下の情報が与えられています。
 
 【長期記憶】
@@ -19,6 +22,10 @@ trueと出力した場合は、改行して、あなたの返答を出力して�
 長期記憶を更新する場合は、改行ののち、次のフォーマットで1行で、記憶しておくべき内容をすべて出力してください。古い内容も出力しないと、消去されてしまうことに注意してください。
 
 UPDATE_MEMORY: 記憶内容
+
+# 過去の会話履歴
+
+{{HISTORY}}
 `;
 
 const MODEL_ID = "gpt-4.1-mini";
@@ -40,11 +47,13 @@ export class AiWithMemory {
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       {
         role: "system",
-        content: SYSTEM_PROMPT.replace("{{MEMORY}}", this.memory),
+        content: SYSTEM_PROMPT
+          .replace("{{MEMORY}}", this.memory)
+          .replace("{{HISTORY}}", history.slice(0, history.length - 1).join("\n")),
       },
       {
         role: "user",
-        content: history.join("\n"),
+        content: history[history.length - 1],
       },
     ];
     try {
