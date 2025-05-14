@@ -15,11 +15,8 @@ const SYSTEM_PROMPT = `
 
 返答を作成するとき、この長期記憶の情報を参考にすることができます。
 
-返答するかどうか検討し、しないならfalseとだけ出力し、するならtrueと出力してください。
-trueと出力した場合は、改行して、あなたの返答を出力してください。
-
-また、長期記憶はいつでも更新し、以後の返答時に活用することができます。
-長期記憶を更新する場合は、改行ののち、次のフォーマットで1行で、記憶しておくべき内容をすべて出力してください。古い内容も出力しないと、消去されてしまうことに注意してください。
+長期記憶はいつでも更新し、以後の返答時に活用することができます。
+長期記憶を更新する場合は、改行ののち、次のフォーマットで1行で、記憶しておくべき内容をすべて出力してください。今後も記憶しておきたい内容も出力する必要があります。出力しなかった記憶は失われます。
 
 UPDATE_MEMORY: 記憶内容
 
@@ -67,8 +64,6 @@ export class AiWithMemory {
       if (content === null) return null;
 
       const lines = content.split("\n");
-      const has_response = (lines[0].indexOf("true") !== -1);
-      lines.shift();
 
       const lines_memory = lines.filter((line) => line.startsWith("UPDATE_MEMORY:"));
       const lines_response = lines
@@ -82,7 +77,7 @@ export class AiWithMemory {
         console.log("Updated memory:", this.memory);
       }
 
-      if (has_response && lines_response.length > 0) {
+      if (lines_response.length > 0) {
         return lines_response;
       }
 

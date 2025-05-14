@@ -155,6 +155,11 @@ bot.events.messageCreate = async (message) => {
 
   await putChannelHistory(message.channelId.toString(), message, bot);
 
+  // only response to message with "AI" call
+  if (!(["AI", "ＡＩ"].some((word) => message.content.toUpperCase().includes(word)))) {
+    return;
+  }
+
   const ai = getAi(message.guildId?.toString(), message.channelId.toString());
 
   // show typing indicator
