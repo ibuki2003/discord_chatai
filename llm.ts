@@ -92,14 +92,13 @@ export class AiWithMemory {
     // and then get history
     const history = await bot.helpers.getMessages(this.channelId, { limit: HISTORY_SIZE })
       .then((messages) => messages.map((message) => formatMessage(message, this.nick_cache)))
-      .then((messages) => Promise.all(messages))
       .then((messages) => messages.reverse())
       .catch(() => []);
     this.history = history;
     this.trimHistory();
   }
 
-  private async addMessage(message: Message | MyMsg) {
+  private addMessage(message: Message | MyMsg) {
     if ("member" in message && message.author.id !== bot.id) {
       if (message.member?.nick) {
         this.nick_cache.set(message.author.id.toString(), message.member.nick);
@@ -108,7 +107,7 @@ export class AiWithMemory {
       }
     }
 
-    const content = await formatMessage(message, this.nick_cache);
+    const content = formatMessage(message, this.nick_cache);
     this.history.push(content);
     this.trimHistory();
   }
@@ -129,7 +128,7 @@ export class AiWithMemory {
     if (this.history.length === 0) {
       await this.refreshHistory();
     } else {
-      await this.addMessage(message);
+      this.addMessage(message);
     }
 
     // only response to message with "AI" call
@@ -234,21 +233,17 @@ const formatDate = (date: Date): string => format(date, "yyyy/MM/dd HH:mm:ss")
 
 // const memberNickCache = new CachedMap(async (id) => (await bot.helpers.getMember(TARGET_GUILD_ID, id)).nick);
 
-async function formatMessage(message: Message | MyMsg, nickcache: Map<string, string>): Promise<string> {
+function formatMessage(message: Message | MyMsg, nickcache: Map<string, string>): string {
   let content = message.content;
 
   if ("date" in message) {
     return `[${formatDate(message.date)}] ${message.author}: ${content}`;
   }
 
-  const mentions_nicks = await Promise.all(
-    message.mentions?.map(
-      (mention) => [
-        mention.id.toString(),
-        nickcache.get(mention.id.toString()),
-      ]
-    ) ?? []
-  );
+  const mentions_nicks = message.mentions?.map((mention) => [
+    mention.id.toString(),
+    nickcache.get(mention.id.toString()),
+  ]) ?? [];
 
   content = content.replace(/<@!?(\d+)>/g, (match, userId) => {
     const user = message.mentions?.find((mention) => mention.id === userId);
@@ -260,7 +255,7 @@ async function formatMessage(message: Message | MyMsg, nickcache: Map<string, st
   });
 
   const date = message.timestamp ? new Date(message.timestamp) : new Date();
-  const username = message.member?.nick ?? message.author.username;
+  const username = message.member?.nick ?? nickcache.get(message.author.id.toString()) ?? message.author.username;
   // trim up to 100 characters
   return `[${formatDate(date)}] ${username}: ${content}`.substring(0, HISTORY_LINE_MAX);
 }
