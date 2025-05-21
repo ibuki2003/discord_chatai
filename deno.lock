@@ -1,6 +1,7 @@
 {
   "version": "4",
   "specifiers": {
+    "jsr:@core/asyncutil@^1.2.0": "1.2.0",
     "jsr:@db/sqlite@0.12": "0.12.0",
     "jsr:@denosaurs/plug@1": "1.1.0",
     "jsr:@std/assert@0.217": "0.217.0",
@@ -15,6 +16,9 @@
     "npm:@types/node@*": "22.12.0"
   },
   "jsr": {
+    "@core/asyncutil@1.2.0": {
+      "integrity": "9967f15190c60df032c13f72ce5ac73d185c34f31c53dc918d8800025854c118"
+    },
     "@db/sqlite@0.12.0": {
       "integrity": "dd1ef7f621ad50fc1e073a1c3609c4470bd51edc0994139c5bf9851de7a6d85f",
       "dependencies": [
@@ -174,6 +178,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@core/asyncutil@^1.2.0",
       "jsr:@db/sqlite@0.12",
       "jsr:@std/datetime@~0.225.4",
       "npm:@discordeno/bot@21.0.0"
