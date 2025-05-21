@@ -163,9 +163,13 @@ bot.events.messageCreate = async (message) => {
   const ai = getAi(message.guildId?.toString(), message.channelId.toString());
 
   // show typing indicator
-  // await bot.helpers.triggerTypingIndicator(message.channelId);
+  const t = setTimeout(async () => {
+    await bot.helpers.triggerTypingIndicator(message.channelId);
+  }, 1000);
 
   const resp_content = await ai.getResponse(await getChannelHistory(message.channelId.toString(), bot));
+
+  clearTimeout(t);
 
   if (!resp_content) {
     return;
