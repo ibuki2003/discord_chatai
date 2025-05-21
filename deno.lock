@@ -11,7 +11,8 @@
     "jsr:@std/path@0.217": "0.217.0",
     "jsr:@std/path@1": "1.0.8",
     "jsr:@std/path@^1.0.8": "1.0.8",
-    "npm:@discordeno/bot@21.0.0": "21.0.0"
+    "npm:@discordeno/bot@21.0.0": "21.0.0",
+    "npm:@types/node@*": "22.12.0"
   },
   "jsr": {
     "@db/sqlite@0.12.0": {
@@ -93,8 +94,17 @@
         "@discordeno/types"
       ]
     },
+    "@types/node@22.12.0": {
+      "integrity": "sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
     "fzstd@0.1.1": {
       "integrity": "sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA=="
+    },
+    "undici-types@6.20.0": {
+      "integrity": "sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg=="
     },
     "ws@8.18.2": {
       "integrity": "sha512-DMricUmwGZUVr++AEAe2uiVM7UoO9MAVZMDu05UQOaUII0lp+zOzLLU4Xqh/JvTqklB1T4uELaaPBKyjE1r4fQ=="
@@ -110,6 +120,7 @@
     "https://deno.land/x/openai@v4.69.0/internal/qs/formats.ts": "7bbe68548238a984644a723bd045614c5b0e81c1a0ae5c3acc050931442d67d7",
     "https://deno.land/x/openai@v4.69.0/internal/qs/mod.ts": "eab02831aa5e2896d12b824cebf9b2c3a0fc718e8488a05b6d7c2d35895c102a",
     "https://deno.land/x/openai@v4.69.0/internal/qs/stringify.ts": "777514fc7107d6878a8ac80897bd4ca6f9be7ecf67ecf51f57359ec5e7186763",
+    "https://deno.land/x/openai@v4.69.0/internal/qs/types.ts": "9c319089f022ad9d1fd95d87e2232de8c352bb980ee51de757b4bc23181cfbc2",
     "https://deno.land/x/openai@v4.69.0/internal/qs/utils.ts": "9a2ecb6321ed49aa4e6f7cd7a47778365c7c3778283264c7c5e1756bfd7b97d1",
     "https://deno.land/x/openai@v4.69.0/lib/AbstractChatCompletionRunner.ts": "be24ad750e83495a1ec0ea2a6695798f6210e5f939a5d358597f3e46836c7d7c",
     "https://deno.land/x/openai@v4.69.0/lib/AssistantStream.ts": "4d7ab356cc77299e98a5926908ed080de2af0083bba6a1ffeb5509bc8f8d0a9d",
