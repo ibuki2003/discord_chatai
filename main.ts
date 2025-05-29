@@ -30,8 +30,10 @@ bot.events.messageCreate = async (message) => {
   const ai = getAi(message.guildId?.toString(), message.channelId.toString());
 
   // show typing indicator
-  const t = setTimeout(async () => {
-    await bot.helpers.triggerTypingIndicator(message.channelId);
+  let t = setTimeout(() => {
+    t = setInterval(async () => {
+      await bot.helpers.triggerTypingIndicator(message.channelId);
+    }, 10000); // every 10 seconds
   }, 500);
 
   const resp_content = await ai.lock(async (ai) => {
