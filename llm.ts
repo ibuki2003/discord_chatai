@@ -5,8 +5,8 @@ import { format } from "@std/datetime/format";
 import { bot, Message } from "./discord.ts";
 
 const HISTORY_SIZE = 50;
-const HISTORY_LINE_MAX = 100; // chars
-const HISTORY_ALL_MAX = 1000; // chars
+const HISTORY_LINE_MAX = 3000; // chars
+const HISTORY_ALL_MAX = 3000; // chars
 
 // const MY_NAME = (await bot.helpers.getUser(bot.id)).username;
 const MY_NAME = "AI";
