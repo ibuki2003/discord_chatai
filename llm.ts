@@ -39,7 +39,10 @@ MEMORY_FORGET (記憶番号)
 {{HISTORY}}
 `;
 
-export const MODEL_ID = "gpt-4.1-mini";
+export const MODEL_MAP: Record<string, (content: string) => boolean> = {
+  "o4-mini": (content: string) => content.startsWith("!ai-boost"),
+  "gpt-4.1-mini": (content: string) => ["AI", "ＡＩ"].some((word) => content.toUpperCase().includes(word)),
+};
 
 const client = new OpenAI({
   apiKey: Secret.OPENAI_API_KEY,
@@ -131,8 +134,9 @@ export class AiWithMemory {
       this.addMessage(message);
     }
 
-    // only response to message with "AI" call
-    if (!(["AI", "ＡＩ"].some((word) => message.content.toUpperCase().includes(word)))) {
+    // select model based on content predicates
+    const selectedModel = Object.entries(MODEL_MAP).find(([_, predicate]) => predicate(message.content))?.[0];
+    if (!selectedModel) {
       return null;
     }
 
@@ -146,7 +150,7 @@ export class AiWithMemory {
       const response = await client.responses.create({
         instructions: system_instructions,
         input: user_input,
-        model: MODEL_ID,
+        model: selectedModel,
         store: false,
       });
       console.log("Response:", response);
