@@ -18,17 +18,10 @@ const SYSTEM_PROMPT = `
 フレンドリーな性格で振る舞ってください。
 ユーザーの発言に対して、必要ならば返答してください。参考として、過去の会話履歴もユーザー名とともに与えられます。
 
-返答を作成するとき、長期記憶の情報を参考にすることができます。
-また、長期記憶はいつでも更新し、以後の返答時に活用することができます。長期記憶を更新するには、次のコマンドを使います。
-コマンドは、改行の直後に1行で出力してください。複数のコマンドを出力することもできます。
-
-MEMORY_ADD (記憶内容)
-MEMORY_UPDATE (記憶番号) (新しい記憶内容)
-MEMORY_FORGET (記憶番号)
-
-例:
-- MEMORY_FORGET 2
-- MEMORY_ADD 返答は敬語ではなく、フレンドリーな口調で行う
+返答を作成するとき、過去に保存された長期記憶の情報を参照することができます。
+また、長期記憶は今後の返答に活用するため、必要に応じて更新してください。
+ユーザーの要求に応じて、または自分で必要と判断した場合、長期記憶を更新することができます。
+記憶の更新は、返答を作成した後に行ってください。
 
 # 長期記憶
 
@@ -44,25 +37,55 @@ export const MODEL_MAP: Record<string, (content: string) => boolean> = {
   "gpt-4.1-mini": (content: string) => ["AI", "ＡＩ"].some((word) => content.toUpperCase().includes(word)),
 };
 
+const MEMORY_TOOLS: OpenAI.Responses.ResponseCreateParams['tools'] = [
+  {
+    type: "function",
+    name: "memory_add",
+    description: "長期記憶を1つ追加",
+    parameters: {
+      type: "object",
+      properties: { content: { type: "string" } },
+      required: ["content"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "memory_update",
+    description: "長期記憶を1つ更新",
+    parameters: {
+      type: "object",
+      properties: { index: { type: "integer" }, content: { type: "string" } },
+      required: ["index", "content"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "memory_forget",
+    description: "長期記憶を1つ削除",
+    parameters: {
+      type: "object",
+      properties: { index: { type: "integer" } },
+      required: ["index"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+]
+
+type MemoryToolCall = OpenAI.Responses.ResponseFunctionToolCall & (
+  | { name: "memory_add"; arguments: { content: string } }
+  | { name: "memory_update"; arguments: { index: number; content: string } }
+  | { name: "memory_forget"; arguments: { index: number } }
+);
+
+
 const client = new OpenAI({
   apiKey: Secret.OPENAI_API_KEY,
 });
-
-// split into n+1 parts
-function splitn(str: string, delim: string, n: number): string[] {
-  const result: string[] = [];
-  let start = 0;
-  while (result.length + 1 < n) {
-    const index = str.indexOf(delim, start);
-    if (index === -1) {
-      break;
-    }
-    result.push(str.substring(start, index));
-    start = index + delim.length;
-  }
-  result.push(str.substring(start));
-  return result;
-}
 
 export type MyMsg = { author: string; content: string; date: Date; };
 
@@ -151,52 +174,62 @@ export class AiWithMemory {
         instructions: system_instructions,
         input: user_input,
         model: selectedModel,
+        parallel_tool_calls: true,
+        tool_choice: "auto",
+        tools: MEMORY_TOOLS,
         store: false,
       });
-      console.log("Response:", response);
-
-      const outputText = response.output_text;
-      const lines = outputText.split("\n");
+      console.log("Response:", response.output);
 
       const memory_entries = Object.fromEntries(Object.entries(this.memory));
       const memory_adds: string[] = [];
       let memory_updated = false;
 
-      const lines_response = lines.map((line: string) => {
-          if (line.startsWith("MEMORY_ADD")) {
-            const newmem = line.substring(11).trim();
-            memory_adds.push(newmem);
-            memory_updated = true;
-            console.log("Memory add:", newmem);
-            return null;
-          }
-          if (line.startsWith("MEMORY_UPDATE")) {
-            const [_, idx, newmem] = splitn(line, " ", 3);
-            if (memory_entries[idx]) {
-              memory_entries[idx] = newmem.trim();
-              memory_updated = true;
-              console.log("Memory update:", idx, newmem);
-            } else {
-              console.warn(`Memory index ${idx} not found for update.`);
+      let outputText = "";
+      response.output.forEach((part) => {
+          if (part.type === "message") {
+            part.content.forEach((msg) => {
+              if (msg.type === "output_text") {
+                outputText += msg.text;
+              }
+            });
+          } else if (part.type === "function_call") {
+            // Handle tool calls here if needed
+            console.log("Tool call:", part);
+            const call = { name: part.name, arguments: JSON.parse(part.arguments) } as MemoryToolCall;
+            switch (call.name) {
+              case 'memory_add': {
+                const newmem = call.arguments.content.trim();
+                memory_adds.push(newmem);
+                memory_updated = true;
+                console.log("Memory add:", newmem);
+                return null;
+              }
+              case 'memory_update': {
+                const { index: idx, content: newmem } = call.arguments;
+                if (memory_entries[idx]) {
+                  memory_entries[idx] = newmem.trim();
+                  memory_updated = true;
+                  console.log("Memory update:", idx, newmem);
+                } else {
+                  console.warn(`Memory index ${idx} not found for update.`);
+                }
+                return null;
+              }
+              case 'memory_forget': {
+                const idx = call.arguments.index;
+                if (memory_entries[idx]) {
+                  delete memory_entries[idx];
+                  memory_updated = true;
+                  console.log("Memory forget:", idx);
+                } else {
+                  console.warn(`Memory index ${idx} not found for forget.`);
+                }
+                return null;
+              }
             }
-            return null;
           }
-          if (line.startsWith("MEMORY_FORGET")) {
-            const [_, idx] = splitn(line, " ", 2);
-            if (memory_entries[idx]) {
-              delete memory_entries[idx];
-              memory_updated = true;
-              console.log("Memory forget:", idx);
-            } else {
-              console.warn(`Memory index ${idx} not found for forget.`);
-            }
-            return null;
-          }
-          return line;
-        })
-        .filter(Boolean)
-        .join("\n")
-        .trim();
+      });
 
       if (memory_updated) {
         this.memory = [
@@ -207,14 +240,14 @@ export class AiWithMemory {
         console.log("Updated memory:", this.memory);
       }
 
-      if (lines_response.length > 0) {
+      if (outputText.length > 0) {
         this.addMessage({
           author: MY_NAME,
-          content: lines_response,
+          content: outputText,
           date: new Date(),
         });
 
-        return lines_response;
+        return outputText || null;
       }
 
       return null;
