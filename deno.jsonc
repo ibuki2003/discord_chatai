@@ -3,7 +3,7 @@
     "@core/asyncutil": "jsr:@core/asyncutil@^1.2.0",
     "@std/datetime": "jsr:@std/datetime@^0.225.4",
     "discordeno": "npm:@discordeno/bot@21.0.0",
-    "openai": "https://deno.land/x/openai@v4.69.0/mod.ts",
+    "openai": "jsr:@openai/openai@^4.0.0",
     "sqlite": "jsr:@db/sqlite@0.12",
   },
 

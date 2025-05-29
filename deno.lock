@@ -4,6 +4,7 @@
     "jsr:@core/asyncutil@^1.2.0": "1.2.0",
     "jsr:@db/sqlite@0.12": "0.12.0",
     "jsr:@denosaurs/plug@1": "1.1.0",
+    "jsr:@openai/openai@4": "4.102.0",
     "jsr:@std/assert@0.217": "0.217.0",
     "jsr:@std/datetime@~0.225.4": "0.225.4",
     "jsr:@std/encoding@1": "1.0.10",
@@ -34,6 +35,9 @@
         "jsr:@std/fs",
         "jsr:@std/path@1"
       ]
+    },
+    "@openai/openai@4.102.0": {
+      "integrity": "ea5201bc5c8a696d3a5139a9cd2252e3ab9b2b880769a9cd7f05602ea1a02acf"
     },
     "@std/assert@0.217.0": {
       "integrity": "c98e279362ca6982d5285c3b89517b757c1e3477ee9f14eb2fdf80a45aaa9642"
@@ -180,6 +184,7 @@
     "dependencies": [
       "jsr:@core/asyncutil@^1.2.0",
       "jsr:@db/sqlite@0.12",
+      "jsr:@openai/openai@4",
       "jsr:@std/datetime@~0.225.4",
       "npm:@discordeno/bot@21.0.0"
     ]

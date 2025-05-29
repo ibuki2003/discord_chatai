@@ -137,35 +137,28 @@ export class AiWithMemory {
     }
 
     const memory_str = Object.entries(this.memory).map(([key, value]) => `${key}: ${value}`).join("\n");
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: SYSTEM_PROMPT
-          .replace("{{MEMORY}}", memory_str)
-          .replace("{{HISTORY}}", this.history.slice(0, this.history.length - 1).join("\n")),
-      },
-      {
-        role: "user",
-        content: this.history[this.history.length - 1],
-      },
-    ];
+    const system_instructions = SYSTEM_PROMPT
+      .replace("{{MEMORY}}", memory_str)
+      .replace("{{HISTORY}}", this.history.slice(0, this.history.length - 1).join("\n"));
+    const user_input = this.history[this.history.length - 1];
     try {
-      const response = await client.chat.completions.create({
-        messages,
+      // call the responses API with a single input
+      const response = await client.responses.create({
+        instructions: system_instructions,
+        input: user_input,
         model: MODEL_ID,
-        stream: false,
+        store: false,
       });
       console.log("Response:", response);
-      const content = response.choices[0].message.content;
-      if (content === null) return null;
 
-      const lines = content.split("\n");
+      const outputText = response.output_text;
+      const lines = outputText.split("\n");
 
       const memory_entries = Object.fromEntries(Object.entries(this.memory));
       const memory_adds: string[] = [];
       let memory_updated = false;
 
-      const lines_response = lines.map((line) => {
+      const lines_response = lines.map((line: string) => {
           if (line.startsWith("MEMORY_ADD")) {
             const newmem = line.substring(11).trim();
             memory_adds.push(newmem);
