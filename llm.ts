@@ -157,6 +157,14 @@ export class AiWithMemory {
       this.addMessage(message);
     }
 
+    const attachments = [
+      ...(message.attachments ?? []),
+      ...(message.referencedMessage?.attachments ?? []),
+    ];
+    const images_items: OpenAI.Responses.ResponseInputImage[] = attachments
+      .filter((attachment) => attachment.contentType?.startsWith("image/"))
+      .map((attachment) => ({ type: "input_image", detail: "auto", image_url: attachment.url }));
+
     // select model based on content predicates
     const selectedModel = Object.entries(MODEL_MAP).find(([_, predicate]) => predicate(message.content))?.[0];
     if (!selectedModel) {
@@ -167,7 +175,16 @@ export class AiWithMemory {
     const system_instructions = SYSTEM_PROMPT
       .replace("{{MEMORY}}", memory_str)
       .replace("{{HISTORY}}", this.history.slice(0, this.history.length - 1).join("\n"));
-    const user_input = this.history[this.history.length - 1];
+    const user_input: OpenAI.Responses.ResponseInput = [
+      {
+        type: "message",
+        role: "user",
+        content: [
+          { type: "input_text", text: this.history[this.history.length - 1] },
+          ...images_items,
+        ],
+      }
+    ];
     try {
       // call the responses API with a single input
       const response = await client.responses.create({

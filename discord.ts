@@ -16,6 +16,8 @@ export const bot = Discordeno.createBot({
       components: true,
       member: true,
       timestamp: true,
+      attachments: true,
+      referencedMessage: true,
     },
     user: {
       id: true,
@@ -26,6 +28,10 @@ export const bot = Discordeno.createBot({
     member: {
       user: true,
       nick: true,
+    },
+    attachment: {
+      url: true,
+      contentType: true,
     },
   },
   desiredPropertiesBehavior: Discordeno.DesiredPropertiesBehavior.ChangeType,
