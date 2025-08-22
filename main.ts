@@ -31,6 +31,9 @@ bot.events.messageCreate = async (message) => {
 
   // show typing indicator
   let t = setTimeout(() => {
+    // show first typing indicator after 500ms
+    bot.helpers.triggerTypingIndicator(message.channelId);
+    // after that, show typing indicator every 10 seconds
     t = setInterval(async () => {
       await bot.helpers.triggerTypingIndicator(message.channelId);
     }, 10000); // every 10 seconds
