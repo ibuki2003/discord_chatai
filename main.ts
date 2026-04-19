@@ -1,56 +1,305 @@
-import { Secret } from "./secret.ts";
-import { AiWithMemory } from "./llm.ts";
-import { bot } from "./discord.ts";
+import { bot, Message } from "./discord.ts";
+import { channelMap, config, type ModelConfig, type ModelRoute } from "./config.ts";
+import { getChatMemory, setChatMemory } from "./db.ts";
+import { run_llm, type ToolDefinition, type UserTurnContent } from "./llm.ts";
+import { format } from "@std/datetime/format";
 import { AsyncValue } from "@core/asyncutil/async-value";
 import { Lock } from "@core/asyncutil/lock";
 
-const TARGET_GUILD_ID = Secret.TARGET_GUILD_ID;
-const TARGET_CHANNEL_ID = Secret.TARGET_CHANNEL_ID;
+const HISTORY_SIZE = 50;
+const HISTORY_LINE_MAX = 3000;
+const HISTORY_ALL_MAX = 3000;
+const MY_NAME = "AI";
 
-const ChannelAI = new Map<string, Lock<AsyncValue<AiWithMemory>>>();
+const SYSTEM_PROMPT = `
+# 指示
+あなたはグループチャットに参加しているAIです。名前は「AI」と呼ばれます。
+フレンドリーな性格で振る舞ってください。
+ユーザーの発言に対して、必要ならば返答してください。参考として、過去の会話履歴もユーザー名とともに与えられます。
 
-function getAi(guildId: string, channelId: string): Lock<AsyncValue<AiWithMemory>> {
-  if (ChannelAI.has(channelId)) {
-    return ChannelAI.get(channelId)!;
-  }
-  const ai = new AiWithMemory(guildId, channelId);
-  const lock = new Lock(new AsyncValue(ai));
-  ChannelAI.set(channelId, lock);
+返答を作成するとき、過去に保存された長期記憶の情報を参照することができます。
+また、長期記憶は今後の返答に活用するため、必要に応じて更新してください。
+ユーザーの要求に応じて、または自分で必要と判断した場合、長期記憶を更新することができます。
+記憶の更新は、返答を作成した後に行ってください。
+
+# 長期記憶
+
+{{MEMORY}}
+
+# 過去の会話履歴
+
+{{HISTORY}}
+`;
+
+type MyMsg = { author: string; content: string; date: Date };
+
+type ChannelState = {
+  guildId: string;
+  channelId: string;
+  history: string[];
+  memory: string[];
+  nickCache: Map<string, string>;
+};
+
+const channelLocks = new Map<string, Lock<AsyncValue<ChannelState>>>();
+
+function getChannelLock(guildId: string, channelId: string): Lock<AsyncValue<ChannelState>> {
+  if (channelLocks.has(channelId)) return channelLocks.get(channelId)!;
+  const mem = getChatMemory(guildId)?.memory ?? "";
+  const state: ChannelState = {
+    guildId,
+    channelId,
+    history: [],
+    memory: mem.split("\n").map((l) => l.trim()).filter((l) => l.length > 0),
+    nickCache: new Map(),
+  };
+  const lock = new Lock(new AsyncValue(state));
+  channelLocks.set(channelId, lock);
   return lock;
 }
 
+async function refreshHistory(state: ChannelState): Promise<void> {
+  const members = await bot.helpers.getMembers(state.guildId, { limit: 100 });
+  for (const member of members) {
+    if (member.nick && member.user?.id) {
+      state.nickCache.set(member.user.id.toString(), member.nick);
+    }
+  }
+  state.nickCache.set(bot.id.toString(), MY_NAME);
 
-bot.events.messageCreate = async (message) => {
-  if (message.guildId?.toString() !== TARGET_GUILD_ID) return;
-  if (message.channelId.toString() !== TARGET_CHANNEL_ID) return;
-  if (message.author.id === bot.id) return;
+  const history = await bot.helpers.getMessages(state.channelId, { limit: HISTORY_SIZE })
+    .then((messages) => messages.map((message) => formatMessage(message, state.nickCache)))
+    .then((messages) => messages.reverse())
+    .catch(() => []);
+  state.history = history;
+  trimHistory(state);
+}
 
-  console.log("got message", {content: message.content})
+function addMessage(state: ChannelState, message: Message | MyMsg): void {
+  if ("member" in message && message.author.id !== bot.id) {
+    if (message.member?.nick) {
+      state.nickCache.set(message.author.id.toString(), message.member.nick);
+    } else {
+      state.nickCache.delete(message.author.id.toString());
+    }
+  }
+  state.history.push(formatMessage(message, state.nickCache));
+  trimHistory(state);
+}
 
-  const ai = getAi(message.guildId?.toString(), message.channelId.toString());
+function trimHistory(state: ChannelState): void {
+  while (state.history.length > HISTORY_SIZE) {
+    state.history.shift();
+  }
+  let length = state.history.join("\n").length;
+  while (length > HISTORY_ALL_MAX) {
+    const e = state.history.shift();
+    if (!e) break;
+    length -= e.length;
+  }
+}
 
-  // show typing indicator
-  let t = setTimeout(() => {
-    // show first typing indicator after 500ms
-    bot.helpers.triggerTypingIndicator(message.channelId);
-    // after that, show typing indicator every 10 seconds
-    t = setInterval(async () => {
-      await bot.helpers.triggerTypingIndicator(message.channelId);
-    }, 10000); // every 10 seconds
-  }, 500);
+function buildSystemPrompt(state: ChannelState): string {
+  const memoryStr = state.memory
+    .map((val, idx) => `${idx}: ${val}`)
+    .join("\n") || "(何も記憶していません)";
+  return SYSTEM_PROMPT
+    .replace("{{MEMORY}}", memoryStr)
+    .replace("{{HISTORY}}", state.history.slice(0, -1).join("\n"));
+}
 
-  const resp_content = await ai.lock(async (ai) => {
-    return await (await ai.get()).getResponse(message);
+function makeMemoryTools(state: ChannelState): Record<string, ToolDefinition> {
+  return {
+    memory_add: {
+      schema: {
+        type: "function",
+        function: {
+          name: "memory_add",
+          description: "長期記憶を1つ追加",
+          parameters: {
+            type: "object",
+            properties: { content: { type: "string" } },
+            required: ["content"],
+            additionalProperties: false,
+          },
+          strict: true,
+        },
+      },
+      callback: async (argsJson: string) => {
+        const { content } = JSON.parse(argsJson);
+        state.memory.push(content.trim());
+        setChatMemory(state.guildId, state.memory.join("\n"));
+        return "OK";
+      },
+    },
+    memory_update: {
+      schema: {
+        type: "function",
+        function: {
+          name: "memory_update",
+          description: "長期記憶を1つ更新",
+          parameters: {
+            type: "object",
+            properties: {
+              index: { type: "integer" },
+              content: { type: "string" },
+            },
+            required: ["index", "content"],
+            additionalProperties: false,
+          },
+          strict: true,
+        },
+      },
+      callback: async (argsJson: string) => {
+        const { index, content } = JSON.parse(argsJson);
+        if (index >= 0 && index < state.memory.length) {
+          state.memory[index] = content.trim();
+          setChatMemory(state.guildId, state.memory.join("\n"));
+          return "OK";
+        }
+        return `[ERROR] Index ${index} out of range`;
+      },
+    },
+    memory_forget: {
+      schema: {
+        type: "function",
+        function: {
+          name: "memory_forget",
+          description: "長期記憶を1つ削除",
+          parameters: {
+            type: "object",
+            properties: { index: { type: "integer" } },
+            required: ["index"],
+            additionalProperties: false,
+          },
+          strict: true,
+        },
+      },
+      callback: async (argsJson: string) => {
+        const { index } = JSON.parse(argsJson);
+        if (index >= 0 && index < state.memory.length) {
+          state.memory.splice(index, 1);
+          setChatMemory(state.guildId, state.memory.join("\n"));
+          return "OK";
+        }
+        return `[ERROR] Index ${index} out of range`;
+      },
+    },
+  };
+}
+
+function selectModel(content: string, routes: ModelRoute[]): ModelConfig | null {
+  for (const route of routes) {
+    if (new RegExp(route.trigger, "i").test(content)) {
+      return config.models[route.model];
+    }
+  }
+  return null;
+}
+
+const formatDate = (date: Date): string => format(date, "yyyy/MM/dd HH:mm:ss");
+
+function formatMessage(message: Message | MyMsg, nickCache: Map<string, string>): string {
+  let content = message.content;
+
+  if ("date" in message) {
+    return `[${formatDate(message.date)}] ${message.author}: ${content}`;
+  }
+
+  const mentionsNicks = message.mentions?.map((mention) => [
+    mention.id.toString(),
+    nickCache.get(mention.id.toString()),
+  ]) ?? [];
+
+  content = content.replace(/<@!?(\d+)>/g, (match, userId) => {
+    const user = message.mentions?.find((mention) => mention.id === userId);
+    const nick = mentionsNicks.find((mention) => mention[0] === userId)?.[1];
+    if (user) {
+      return `@${nick ?? user.username}`;
+    }
+    return match;
   });
 
-  clearTimeout(t);
+  const date = message.timestamp ? new Date(message.timestamp) : new Date();
+  const username = message.member?.nick ?? nickCache.get(message.author.id.toString()) ?? message.author.username;
+  return `[${formatDate(date)}] ${username}: ${content}`.substring(0, HISTORY_LINE_MAX);
+}
 
-  if (resp_content !== null) {
-    await bot.helpers.sendMessage(message.channelId, {
-      content: resp_content,
-    })
+bot.events.messageCreate = async (message) => {
+  if (message.author.id === bot.id) return;
+
+  const channelIdStr = message.channelId.toString();
+  const channelCfg = channelMap.get(channelIdStr);
+  if (!channelCfg) return;
+
+  if (channelCfg.guildId && message.guildId?.toString() !== channelCfg.guildId) return;
+
+  console.log("got message", { content: message.content });
+
+  const guildId = message.guildId?.toString() ?? channelIdStr;
+  const lock = getChannelLock(guildId, channelIdStr);
+
+  let cleanupTyping: () => void = () => {};
+  const typingTimeout = setTimeout(() => {
+    bot.helpers.triggerTypingIndicator(message.channelId);
+    const interval = setInterval(() => {
+      bot.helpers.triggerTypingIndicator(message.channelId);
+    }, 10000);
+    cleanupTyping = () => clearInterval(interval);
+  }, 500);
+
+  const responseText = await lock.lock(async (stateVal) => {
+    const state = await stateVal.get();
+
+    if (state.history.length === 0) {
+      await refreshHistory(state);
+    } else {
+      addMessage(state, message);
+    }
+
+    const modelConfig = selectModel(message.content, channelCfg.models);
+    if (!modelConfig) return null;
+
+    const systemPrompt = buildSystemPrompt(state);
+    const tools = makeMemoryTools(state);
+
+    const attachments = [
+      ...(message.attachments ?? []),
+      ...(message.referencedMessage?.attachments ?? []),
+    ];
+    const userTurn: UserTurnContent[] = [
+      { type: "text", text: state.history[state.history.length - 1] },
+      ...attachments
+        .filter((att) => att.contentType?.startsWith("image/"))
+        .map((att): UserTurnContent => ({
+          type: "image_url",
+          image_url: { url: att.url, detail: "auto" },
+        })),
+    ];
+
+    let outputText = "";
+    try {
+      for await (const item of run_llm(userTurn, systemPrompt, modelConfig, tools)) {
+        if (item.type === "text") outputText += item.content;
+      }
+    } catch (err) {
+      console.error("Error from LLM:", err);
+      return null;
+    }
+
+    if (outputText) {
+      addMessage(state, { author: MY_NAME, content: outputText, date: new Date() });
+    }
+
+    return outputText || null;
+  });
+
+  clearTimeout(typingTimeout);
+  cleanupTyping();
+
+  if (responseText) {
+    await bot.helpers.sendMessage(message.channelId, { content: responseText });
   }
 };
 
-await bot.start()
-
+await bot.start();

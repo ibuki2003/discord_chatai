@@ -2,8 +2,11 @@
   "imports": {
     "@core/asyncutil": "jsr:@core/asyncutil@^1.2.0",
     "@std/datetime": "jsr:@std/datetime@^0.225.4",
+    "@std/yaml": "jsr:@std/yaml@^1.0.11",
+    "@zod/zod": "npm:zod@^3.25.76",
     "discordeno": "npm:@discordeno/bot@21.0.0",
-    "openai": "jsr:@openai/openai@^4.0.0",
+    "openai": "jsr:@openai/openai@^6.32.0",
+    "@openrouter/api": "npm:@openrouter/api",
     "sqlite": "jsr:@db/sqlite@0.12",
   },
 

@@ -1,0 +1,23 @@
+models:
+  fast:
+    name: "gpt-4.1-mini"
+    provider: "openai"
+  boost:
+    name: "o4-mini"
+    provider: "openai"
+    reasoning_effort: "medium"
+  haiku:
+    name: "anthropic/claude-3-haiku"
+    provider: "openrouter"
+
+channels:
+  - channelId: "123456789012345678"
+    models:
+      - model: boost
+        trigger: "^!ai-boost"
+      - model: fast
+        trigger: "AI|ＡＩ"
+  - channelId: "987654321098765432"
+    models:
+      - model: haiku
+        trigger: "AI|ＡＩ"
