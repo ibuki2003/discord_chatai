@@ -2,6 +2,7 @@ import { bot, Message } from "./discord.ts";
 import { channelMap, config, type ModelConfig, type ModelRoute } from "./config.ts";
 import { getChatMemory, setChatMemory } from "./db.ts";
 import { run_llm, type ToolDefinition, type UserTurnContent } from "./llm.ts";
+import { splitForDiscord } from "./util.ts";
 import { format } from "@std/datetime/format";
 import { AsyncValue } from "@core/asyncutil/async-value";
 import { Lock } from "@core/asyncutil/lock";
@@ -248,7 +249,7 @@ bot.events.messageCreate = async (message) => {
     cleanupTyping = () => clearInterval(interval);
   }, 500);
 
-  const responseText = await lock.lock(async (stateVal) => {
+  await lock.lock(async (stateVal) => {
     const state = await stateVal.get();
 
     if (state.history.length === 0) {
@@ -258,7 +259,7 @@ bot.events.messageCreate = async (message) => {
     }
 
     const modelConfig = selectModel(message.content, channelCfg.models);
-    if (!modelConfig) return null;
+    if (!modelConfig) return;
 
     const systemPrompt = buildSystemPrompt(state);
     const tools = makeMemoryTools(state);
@@ -280,26 +281,27 @@ bot.events.messageCreate = async (message) => {
     let outputText = "";
     try {
       for await (const item of run_llm(userTurn, systemPrompt, modelConfig, tools)) {
-        if (item.type === "text") outputText += item.content;
+        if (item.type === "text") {
+          outputText += item.content;
+          for (const segment of splitForDiscord(item.content)) {
+            if (segment) {
+              await bot.helpers.sendMessage(message.channelId, { content: segment });
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("Error from LLM:", err);
-      return null;
+      return;
     }
 
     if (outputText) {
       addMessage(state, { author: MY_NAME, content: outputText, date: new Date() });
     }
-
-    return outputText || null;
   });
 
   clearTimeout(typingTimeout);
   cleanupTyping();
-
-  if (responseText) {
-    await bot.helpers.sendMessage(message.channelId, { content: responseText });
-  }
 };
 
 await bot.start();
