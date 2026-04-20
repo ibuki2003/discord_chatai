@@ -284,7 +284,7 @@ bot.events.messageCreate = async (message) => {
         if (item.type === "text") {
           outputText += item.content;
           for (const segment of splitForDiscord(item.content)) {
-            if (segment) {
+            if (segment.trim()) {
               await bot.helpers.sendMessage(message.channelId, { content: segment });
             }
           }
