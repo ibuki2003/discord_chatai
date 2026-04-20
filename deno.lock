@@ -1,10 +1,10 @@
 {
-  "version": "4",
+  "version": "5",
   "specifiers": {
     "jsr:@core/asyncutil@^1.2.0": "1.2.0",
     "jsr:@db/sqlite@0.12": "0.12.0",
     "jsr:@denosaurs/plug@1": "1.1.0",
-    "jsr:@openai/openai@4": "4.102.0",
+    "jsr:@openai/openai@^6.32.0": "6.34.0",
     "jsr:@std/assert@0.217": "0.217.0",
     "jsr:@std/datetime@~0.225.4": "0.225.4",
     "jsr:@std/encoding@1": "1.0.10",
@@ -13,8 +13,11 @@
     "jsr:@std/path@0.217": "0.217.0",
     "jsr:@std/path@1": "1.0.8",
     "jsr:@std/path@^1.0.8": "1.0.8",
+    "jsr:@std/yaml@^1.0.11": "1.0.12",
     "npm:@discordeno/bot@21.0.0": "21.0.0",
-    "npm:@types/node@*": "22.12.0"
+    "npm:@openrouter/sdk@*": "0.12.16",
+    "npm:@types/node@*": "22.12.0",
+    "npm:zod@^3.25.76": "3.25.76"
   },
   "jsr": {
     "@core/asyncutil@1.2.0": {
@@ -36,8 +39,8 @@
         "jsr:@std/path@1"
       ]
     },
-    "@openai/openai@4.102.0": {
-      "integrity": "ea5201bc5c8a696d3a5139a9cd2252e3ab9b2b880769a9cd7f05602ea1a02acf"
+    "@openai/openai@6.34.0": {
+      "integrity": "c2bc27f6ddc03cd87122a539783b620c94b1ae7e3282984429813f117519c1b5"
     },
     "@std/assert@0.217.0": {
       "integrity": "c98e279362ca6982d5285c3b89517b757c1e3477ee9f14eb2fdf80a45aaa9642"
@@ -65,6 +68,9 @@
     },
     "@std/path@1.0.8": {
       "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
+    },
+    "@std/yaml@1.0.12": {
+      "integrity": "7deabca4545bcedd07c5f69ea53acea71b8b4c67562f224e17b90d75944cb20c"
     }
   },
   "npm": {
@@ -82,8 +88,10 @@
       "dependencies": [
         "@discordeno/types",
         "@discordeno/utils",
-        "fzstd",
         "ws"
+      ],
+      "optionalDependencies": [
+        "fzstd"
       ]
     },
     "@discordeno/rest@21.0.0": {
@@ -102,6 +110,13 @@
         "@discordeno/types"
       ]
     },
+    "@openrouter/sdk@0.12.16": {
+      "integrity": "sha512-O4DJU49NGl12nITT6bvVaIP5vE/2p8PIhQPVNic8iRpbZZHaugChp6R5OBfCxTJEwqLh60ArrdFvlDLcgct/Aw==",
+      "dependencies": [
+        "zod"
+      ],
+      "scripts": true
+    },
     "@types/node@22.12.0": {
       "integrity": "sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==",
       "dependencies": [
@@ -116,6 +131,9 @@
     },
     "ws@8.18.2": {
       "integrity": "sha512-DMricUmwGZUVr++AEAe2uiVM7UoO9MAVZMDu05UQOaUII0lp+zOzLLU4Xqh/JvTqklB1T4uELaaPBKyjE1r4fQ=="
+    },
+    "zod@3.25.76": {
+      "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="
     }
   },
   "remote": {
@@ -184,9 +202,12 @@
     "dependencies": [
       "jsr:@core/asyncutil@^1.2.0",
       "jsr:@db/sqlite@0.12",
-      "jsr:@openai/openai@4",
+      "jsr:@openai/openai@^6.32.0",
       "jsr:@std/datetime@~0.225.4",
-      "npm:@discordeno/bot@21.0.0"
+      "jsr:@std/yaml@^1.0.11",
+      "npm:@discordeno/bot@21.0.0",
+      "npm:@openrouter/sdk@*",
+      "npm:zod@^3.25.76"
     ]
   }
 }

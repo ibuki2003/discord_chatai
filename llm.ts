@@ -1,5 +1,6 @@
 import OpenAI from "openai";
-import OpenRouter from "@openrouter/api";
+import { OpenRouter } from "@openrouter/sdk";
+import type { ChatMessages, ChatFunctionToolFunction } from "@openrouter/sdk/models";
 import { Secret } from "./secret.ts";
 import type { ModelConfig } from "./config.ts";
 
@@ -107,20 +108,20 @@ async function* run_chat_completion(
   tools?: Record<string, ToolDefinition>,
 ): AsyncGenerator<ResultItem> {
   const tool_schemas = tools
-    ? Object.values(tools).map((t) => t.schema)
+    ? Object.values(tools).map((t) => t.schema as unknown as ChatFunctionToolFunction)
     : undefined;
 
-  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+  const messages: ChatMessages[] = [
     { role: "system", content: systemPrompt },
     {
       role: "user",
-      content: userTurn.map((item): OpenAI.Chat.Completions.ChatCompletionContentPart => {
+      content: userTurn.map((item) => {
         if (item.type === "text") {
-          return { type: "text", text: item.text };
+          return { type: "text" as const, text: item.text };
         } else {
           return {
-            type: "image_url",
-            image_url: { url: item.image_url.url, detail: item.image_url.detail },
+            type: "image_url" as const,
+            imageUrl: { url: item.image_url.url, detail: item.image_url.detail },
           };
         }
       }),
@@ -128,37 +129,35 @@ async function* run_chat_completion(
   ];
 
   while (true) {
-    const res = await openrouter_client.chat.completions.create({
-      model: modelConfig.name,
-      messages,
-      ...(tool_schemas ? { tools: tool_schemas, tool_choice: "auto" as const } : {}),
-      stream: false,
-    }) as OpenAI.Chat.Completions.ChatCompletion;
+    const res = await openrouter_client.chat.send({
+      chatRequest: {
+        model: modelConfig.name,
+        messages,
+        ...(tool_schemas ? { tools: tool_schemas, tool_choice: "auto" } : {}),
+        stream: false,
+      },
+    });
 
     const choice = res.choices[0];
     if (!choice) break;
 
-    messages.push(choice.message as OpenAI.Chat.Completions.ChatCompletionMessageParam);
+    messages.push(choice.message as unknown as ChatMessages);
 
     if (choice.message.content) {
-      yield { type: "text", content: choice.message.content };
+      yield { type: "text", content: choice.message.content as string };
     }
 
-    if (
-      choice.finish_reason !== "tool_calls" ||
-      !choice.message.tool_calls?.length
-    ) {
+    if (choice.finishReason !== "tool_calls" || !choice.message.toolCalls?.length) {
       break;
     }
 
-    for (const call of choice.message.tool_calls) {
-      if (call.type !== "function") continue;
+    for (const call of choice.message.toolCalls) {
       yield { type: "tool_call", tool_name: call.function.name, content: call.function.arguments };
       const tool = tools?.[call.function.name];
       const result = tool
         ? await tool.callback(call.function.arguments)
         : `[ERROR] No tool found for function ${call.function.name}`;
-      messages.push({ role: "tool", tool_call_id: call.id, content: result });
+      messages.push({ role: "tool", content: result, toolCallId: call.id } as unknown as ChatMessages);
     }
   }
 }
