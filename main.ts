@@ -182,24 +182,30 @@ function makeMemoryTools(state: ChannelState): Record<string, ToolDefinition> {
         type: "function",
         function: {
           name: "memory_forget",
-          description: "長期記憶を1つ削除",
+          description: "長期記憶を削除",
           parameters: {
             type: "object",
-            properties: { index: { type: "integer" } },
-            required: ["index"],
+            properties: {
+              indices: { type: "array", items: { type: "integer" } },
+            },
+            required: ["indices"],
             additionalProperties: false,
           },
           strict: true,
         },
       },
       callback: async (argsJson: string) => {
-        const { index } = JSON.parse(argsJson);
-        if (index >= 0 && index < state.memory.length) {
-          state.memory.splice(index, 1);
-          setChatMemory(state.guildId, state.memory.join("\n"));
-          return "OK";
+        const { indices } = JSON.parse(argsJson);
+        const invalid = indices.filter((i: number) =>
+          i < 0 || i >= state.memory.length
+        );
+        if (invalid.length > 0) {
+          return `[ERROR] Indices out of range: ${invalid.join(", ")}`;
         }
-        return `[ERROR] Index ${index} out of range`;
+        const toRemove = new Set<number>(indices);
+        state.memory = state.memory.filter((_, i) => !toRemove.has(i));
+        setChatMemory(state.guildId, state.memory.join("\n"));
+        return "OK";
       },
     },
   };
