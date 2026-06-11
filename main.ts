@@ -117,7 +117,7 @@ function buildSystemPrompt(state: ChannelState): string {
     .map((val, idx) => `${idx}: ${val}`)
     .join("\n") || "(何も記憶していません)";
   const prompt =
-    config.channels.find((ch) => ch.channelId === state.channelId)?.prompt ??
+    channelMap.get(state.channelId)?.prompt ??
       config.system_prompt ??
       SYSTEM_PROMPT;
   return prompt

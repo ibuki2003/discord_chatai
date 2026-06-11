@@ -52,11 +52,13 @@ const ChannelConfigSchema = z.object({
   channelId: z.string(),
   guildId: z.string().optional(),
   models: z.array(ModelRouteSchema).min(1),
+  prompt: z.string().optional(),
 });
 
 const ConfigSchema = z.object({
   models: z.record(z.string(), ModelConfigSchema).default({}),
   channels: z.array(ChannelConfigSchema).default([]),
+  system_prompt: z.string().optional(),
 });
 
 function loadConfig(): Config {
