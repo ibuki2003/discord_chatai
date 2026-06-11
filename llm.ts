@@ -1,6 +1,9 @@
 import OpenAI from "openai";
 import { OpenRouter } from "@openrouter/sdk";
-import type { ChatMessages, ChatFunctionToolFunction } from "@openrouter/sdk/models";
+import type {
+  ChatFunctionToolFunction,
+  ChatMessages,
+} from "@openrouter/sdk/models";
 import { Secret } from "./secret.ts";
 import type { ModelConfig } from "./config.ts";
 
@@ -39,7 +42,11 @@ export async function* run_llm(
       yield* run_chat_completion(userTurn, systemPrompt, modelConfig, tools);
       break;
     default:
-      throw new Error(`Unsupported provider: ${(modelConfig as { provider: string }).provider}`);
+      throw new Error(
+        `Unsupported provider: ${
+          (modelConfig as { provider: string }).provider
+        }`,
+      );
   }
 }
 
@@ -92,7 +99,11 @@ async function* run_responses_api(
         }
       }
     } else if (part.type === "function_call" && tools) {
-      yield { type: "tool_call", tool_name: part.name, content: part.arguments };
+      yield {
+        type: "tool_call",
+        tool_name: part.name,
+        content: part.arguments,
+      };
       const tool = tools[part.name];
       if (tool) {
         await tool.callback(part.arguments);
@@ -108,7 +119,9 @@ async function* run_chat_completion(
   tools?: Record<string, ToolDefinition>,
 ): AsyncGenerator<ResultItem> {
   const tool_schemas = tools
-    ? Object.values(tools).map((t) => t.schema as unknown as ChatFunctionToolFunction)
+    ? Object.values(tools).map((t) =>
+      t.schema as unknown as ChatFunctionToolFunction
+    )
     : undefined;
 
   const messages: ChatMessages[] = [
@@ -121,7 +134,10 @@ async function* run_chat_completion(
         } else {
           return {
             type: "image_url" as const,
-            imageUrl: { url: item.image_url.url, detail: item.image_url.detail },
+            imageUrl: {
+              url: item.image_url.url,
+              detail: item.image_url.detail,
+            },
           };
         }
       }),
@@ -147,17 +163,29 @@ async function* run_chat_completion(
       yield { type: "text", content: choice.message.content as string };
     }
 
-    if (choice.finishReason !== "tool_calls" || !choice.message.toolCalls?.length) {
+    if (
+      choice.finishReason !== "tool_calls" || !choice.message.toolCalls?.length
+    ) {
       break;
     }
 
     for (const call of choice.message.toolCalls) {
-      yield { type: "tool_call", tool_name: call.function.name, content: call.function.arguments };
+      yield {
+        type: "tool_call",
+        tool_name: call.function.name,
+        content: call.function.arguments,
+      };
       const tool = tools?.[call.function.name];
       const result = tool
         ? await tool.callback(call.function.arguments)
         : `[ERROR] No tool found for function ${call.function.name}`;
-      messages.push({ role: "tool", content: result, toolCallId: call.id } as unknown as ChatMessages);
+      messages.push(
+        {
+          role: "tool",
+          content: result,
+          toolCallId: call.id,
+        } as unknown as ChatMessages,
+      );
     }
   }
 }

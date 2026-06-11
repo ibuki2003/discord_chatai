@@ -23,4 +23,3 @@ export class CachedMap<T> {
     this.cache.set(key, value);
   }
 }
-

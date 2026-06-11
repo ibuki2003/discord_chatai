@@ -1,5 +1,10 @@
 import { bot, Message } from "./discord.ts";
-import { channelMap, config, type ModelConfig, type ModelRoute } from "./config.ts";
+import {
+  channelMap,
+  config,
+  type ModelConfig,
+  type ModelRoute,
+} from "./config.ts";
 import { getChatMemory, setChatMemory } from "./db.ts";
 import { run_llm, type ToolDefinition, type UserTurnContent } from "./llm.ts";
 import { splitForDiscord } from "./util.ts";
@@ -44,7 +49,10 @@ type ChannelState = {
 
 const channelLocks = new Map<string, Lock<AsyncValue<ChannelState>>>();
 
-function getChannelLock(guildId: string, channelId: string): Lock<AsyncValue<ChannelState>> {
+function getChannelLock(
+  guildId: string,
+  channelId: string,
+): Lock<AsyncValue<ChannelState>> {
   if (channelLocks.has(channelId)) return channelLocks.get(channelId)!;
   const mem = getChatMemory(guildId)?.memory ?? "";
   const state: ChannelState = {
@@ -68,8 +76,12 @@ async function refreshHistory(state: ChannelState): Promise<void> {
   }
   state.nickCache.set(bot.id.toString(), MY_NAME);
 
-  const history = await bot.helpers.getMessages(state.channelId, { limit: HISTORY_SIZE })
-    .then((messages) => messages.map((message) => formatMessage(message, state.nickCache)))
+  const history = await bot.helpers.getMessages(state.channelId, {
+    limit: HISTORY_SIZE,
+  })
+    .then((messages) =>
+      messages.map((message) => formatMessage(message, state.nickCache))
+    )
     .then((messages) => messages.reverse())
     .catch(() => []);
   state.history = history;
@@ -189,7 +201,10 @@ function makeMemoryTools(state: ChannelState): Record<string, ToolDefinition> {
   };
 }
 
-function selectModel(content: string, routes: ModelRoute[]): ModelConfig | null {
+function selectModel(
+  content: string,
+  routes: ModelRoute[],
+): ModelConfig | null {
   for (const route of routes) {
     if (new RegExp(route.trigger, "i").test(content)) {
       return config.models[route.model];
@@ -200,7 +215,10 @@ function selectModel(content: string, routes: ModelRoute[]): ModelConfig | null 
 
 const formatDate = (date: Date): string => format(date, "yyyy/MM/dd HH:mm:ss");
 
-function formatMessage(message: Message | MyMsg, nickCache: Map<string, string>): string {
+function formatMessage(
+  message: Message | MyMsg,
+  nickCache: Map<string, string>,
+): string {
   let content = message.content;
 
   if ("date" in message) {
@@ -222,8 +240,12 @@ function formatMessage(message: Message | MyMsg, nickCache: Map<string, string>)
   });
 
   const date = message.timestamp ? new Date(message.timestamp) : new Date();
-  const username = message.member?.nick ?? nickCache.get(message.author.id.toString()) ?? message.author.username;
-  return `[${formatDate(date)}] ${username}: ${content}`.substring(0, HISTORY_LINE_MAX);
+  const username = message.member?.nick ??
+    nickCache.get(message.author.id.toString()) ?? message.author.username;
+  return `[${formatDate(date)}] ${username}: ${content}`.substring(
+    0,
+    HISTORY_LINE_MAX,
+  );
 }
 
 bot.events.messageCreate = async (message) => {
@@ -233,7 +255,9 @@ bot.events.messageCreate = async (message) => {
   const channelCfg = channelMap.get(channelIdStr);
   if (!channelCfg) return;
 
-  if (channelCfg.guildId && message.guildId?.toString() !== channelCfg.guildId) return;
+  if (
+    channelCfg.guildId && message.guildId?.toString() !== channelCfg.guildId
+  ) return;
 
   console.log("got message", { content: message.content });
 
@@ -280,12 +304,16 @@ bot.events.messageCreate = async (message) => {
 
     let outputText = "";
     try {
-      for await (const item of run_llm(userTurn, systemPrompt, modelConfig, tools)) {
+      for await (
+        const item of run_llm(userTurn, systemPrompt, modelConfig, tools)
+      ) {
         if (item.type === "text") {
           outputText += item.content;
           for (const segment of splitForDiscord(item.content)) {
             if (segment.trim()) {
-              await bot.helpers.sendMessage(message.channelId, { content: segment });
+              await bot.helpers.sendMessage(message.channelId, {
+                content: segment,
+              });
             }
           }
         }
@@ -296,7 +324,11 @@ bot.events.messageCreate = async (message) => {
     }
 
     if (outputText) {
-      addMessage(state, { author: MY_NAME, content: outputText, date: new Date() });
+      addMessage(state, {
+        author: MY_NAME,
+        content: outputText,
+        date: new Date(),
+      });
     }
   });
 

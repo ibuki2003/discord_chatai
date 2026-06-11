@@ -4,7 +4,8 @@ import { Secret } from "./secret.ts";
 
 export const bot = Discordeno.createBot({
   token: Secret.DISCORD_TOKEN,
-  intents: Intents.Guilds | Intents.GuildMessages | Intents.MessageContent | Intents.GuildMembers,
+  intents: Intents.Guilds | Intents.GuildMessages | Intents.MessageContent |
+    Intents.GuildMembers,
   desiredProperties: {
     message: {
       id: true,
@@ -39,9 +40,8 @@ export const bot = Discordeno.createBot({
   events: {
     ready: ({ shardId }) => console.log(`Shard ${shardId} ready`),
   },
-})
+});
 
 export type Bot = typeof bot;
 export type Message = Bot["transformers"]["$inferredTypes"]["message"];
 export type User = Bot["transformers"]["$inferredTypes"]["user"];
-

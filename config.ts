@@ -34,7 +34,14 @@ const ModelConfigSchema = z.object({
 const ModelRouteSchema = z.object({
   model: z.string(),
   trigger: z.string().refine(
-    (t) => { try { new RegExp(t); return true; } catch { return false; } },
+    (t) => {
+      try {
+        new RegExp(t);
+        return true;
+      } catch {
+        return false;
+      }
+    },
     { message: "Invalid regex pattern" },
   ),
 });
@@ -56,7 +63,9 @@ function loadConfig(): Config {
     text = Deno.readTextFileSync(new URL("./config.yaml", import.meta.url));
   } catch (err) {
     if (err instanceof Deno.errors.NotFound) {
-      console.error("config.yaml not found. Copy config.example.yaml to config.yaml and fill in your settings.");
+      console.error(
+        "config.yaml not found. Copy config.example.yaml to config.yaml and fill in your settings.",
+      );
       Deno.exit(1);
     }
     throw err;
@@ -71,7 +80,9 @@ function loadConfig(): Config {
   for (const channel of result.data.channels) {
     for (const route of channel.models) {
       if (!result.data.models[route.model]) {
-        console.error(`config.yaml: channel ${channel.channelId}: model "${route.model}" not found in models section`);
+        console.error(
+          `config.yaml: channel ${channel.channelId}: model "${route.model}" not found in models section`,
+        );
         Deno.exit(1);
       }
     }
