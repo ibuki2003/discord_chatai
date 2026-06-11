@@ -24,6 +24,7 @@ export type ChannelConfig = {
 export type Config = {
   models: Record<string, ModelConfig>;
   channels: ChannelConfig[];
+  system_prompt?: string;
 };
 
 const ModelConfigSchema = z.object({
