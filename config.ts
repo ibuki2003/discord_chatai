@@ -18,6 +18,7 @@ export type ChannelConfig = {
   channelId: string;
   guildId?: string;
   models: ModelRoute[];
+  prompt?: string;
 };
 
 export type Config = {
