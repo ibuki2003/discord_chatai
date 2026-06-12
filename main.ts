@@ -117,7 +117,7 @@ function buildSystemPrompt(state: ChannelState): string {
     .map((val, idx) => `${idx}: ${val}`)
     .join("\n") || "(何も記憶していません)";
   const prompt =
-    channelMap.get(state.channelId)?.prompt ??
+    config.guilds[state.guildId]?.prompt ??
       config.system_prompt ??
       SYSTEM_PROMPT;
   return prompt
@@ -262,16 +262,14 @@ bot.events.messageCreate = async (message) => {
   if (message.author.id === bot.id) return;
 
   const channelIdStr = message.channelId.toString();
-  const channelCfg = channelMap.get(channelIdStr);
-  if (!channelCfg) return;
+  const channelEntry = channelMap.get(channelIdStr);
+  if (!channelEntry) return;
 
-  if (
-    channelCfg.guildId && message.guildId?.toString() !== channelCfg.guildId
-  ) return;
+  const { guildId, channelCfg } = channelEntry;
+  if (message.guildId?.toString() !== guildId) return;
 
   console.log("got message", { content: message.content });
 
-  const guildId = message.guildId?.toString() ?? channelIdStr;
   const lock = getChannelLock(guildId, channelIdStr);
 
   let cleanupTyping: () => void = () => {};

@@ -15,15 +15,17 @@ export type ModelRoute = {
 };
 
 export type ChannelConfig = {
-  channelId: string;
-  guildId?: string;
   models: ModelRoute[];
+};
+
+export type GuildConfig = {
   prompt?: string;
+  channels: Record<string, ChannelConfig>;
 };
 
 export type Config = {
   models: Record<string, ModelConfig>;
-  channels: ChannelConfig[];
+  guilds: Record<string, GuildConfig>;
   system_prompt?: string;
 };
 
@@ -49,15 +51,17 @@ const ModelRouteSchema = z.object({
 });
 
 const ChannelConfigSchema = z.object({
-  channelId: z.string(),
-  guildId: z.string().optional(),
   models: z.array(ModelRouteSchema).min(1),
+});
+
+const GuildConfigSchema = z.object({
   prompt: z.string().optional(),
+  channels: z.record(z.string(), ChannelConfigSchema).default({}),
 });
 
 const ConfigSchema = z.object({
   models: z.record(z.string(), ModelConfigSchema).default({}),
-  channels: z.array(ChannelConfigSchema).default([]),
+  guilds: z.record(z.string(), GuildConfigSchema).default({}),
   system_prompt: z.string().optional(),
 });
 
@@ -81,13 +85,15 @@ function loadConfig(): Config {
     Deno.exit(1);
   }
 
-  for (const channel of result.data.channels) {
-    for (const route of channel.models) {
-      if (!result.data.models[route.model]) {
-        console.error(
-          `config.yaml: channel ${channel.channelId}: model "${route.model}" not found in models section`,
-        );
-        Deno.exit(1);
+  for (const [guildId, guild] of Object.entries(result.data.guilds)) {
+    for (const [channelId, channel] of Object.entries(guild.channels)) {
+      for (const route of channel.models) {
+        if (!result.data.models[route.model]) {
+          console.error(
+            `config.yaml: guild ${guildId} channel ${channelId}: model "${route.model}" not found in models section`,
+          );
+          Deno.exit(1);
+        }
       }
     }
   }
@@ -97,6 +103,13 @@ function loadConfig(): Config {
 
 export const config: Config = loadConfig();
 
-export const channelMap: Map<string, ChannelConfig> = new Map(
-  config.channels.map((ch) => [ch.channelId, ch]),
-);
+// flat map: channelId -> { guildId, channelCfg }
+export const channelMap: Map<string, { guildId: string; channelCfg: ChannelConfig }> =
+  new Map(
+    Object.entries(config.guilds).flatMap(([guildId, guild]) =>
+      Object.entries(guild.channels).map(([channelId, channelCfg]) => [
+        channelId,
+        { guildId, channelCfg },
+      ])
+    ),
+  );

@@ -10,14 +10,18 @@ models:
     name: "anthropic/claude-3-haiku"
     provider: "openrouter"
 
-channels:
-  - channelId: "123456789012345678"
-    models:
-      - model: boost
-        trigger: "^!ai-boost"
-      - model: fast
-        trigger: "AI|ＡＩ"
-  - channelId: "987654321098765432"
-    models:
-      - model: haiku
-        trigger: "AI|ＡＩ"
+# Note: quote Discord snowflake IDs (they exceed JS safe integer range)
+guilds:
+  "111111111111111111":
+    # prompt: "optional per-guild system prompt"
+    channels:
+      "123456789012345678":
+        models:
+          - model: boost
+            trigger: "^!ai-boost"
+          - model: fast
+            trigger: "AI|ＡＩ"
+      "987654321098765432":
+        models:
+          - model: haiku
+            trigger: "AI|ＡＩ"
