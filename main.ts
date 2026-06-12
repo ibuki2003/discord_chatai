@@ -4,6 +4,7 @@ import {
   config,
   type ModelConfig,
   type ModelRoute,
+  resolveParentPrompt,
 } from "./config.ts";
 import { getChatMemory, setChatMemory } from "./db.ts";
 import { run_llm, type ToolDefinition, type UserTurnContent } from "./llm.ts";
@@ -116,10 +117,18 @@ function buildSystemPrompt(state: ChannelState): string {
   const memoryStr = state.memory
     .map((val, idx) => `${idx}: ${val}`)
     .join("\n") || "(何も記憶していません)";
-  const prompt =
-    config.guilds[state.guildId]?.prompt ??
-      config.system_prompt ??
-      SYSTEM_PROMPT;
+
+  const globalPrompt = config.system_prompt ?? SYSTEM_PROMPT;
+  const guildPromptRaw = config.guilds[state.guildId]?.prompt;
+  const guildPrompt = guildPromptRaw
+    ? resolveParentPrompt(guildPromptRaw, globalPrompt)
+    : globalPrompt;
+  const channelPromptRaw =
+    channelMap.get(state.channelId)?.channelCfg.prompt;
+  const prompt = channelPromptRaw
+    ? resolveParentPrompt(channelPromptRaw, guildPrompt)
+    : guildPrompt;
+
   return prompt
     .replace("{{MEMORY}}", memoryStr)
     .replace("{{HISTORY}}", state.history.slice(0, -1).join("\n"));

@@ -10,12 +10,16 @@ models:
     name: "anthropic/claude-3-haiku"
     provider: "openrouter"
 
+# Prompts support @directives:
+#   @./path/to/file or @/abs/path  -- inline file contents
+#   @parent                        -- embed the parent-level prompt
 # Note: quote Discord snowflake IDs (they exceed JS safe integer range)
 guilds:
   "111111111111111111":
-    # prompt: "optional per-guild system prompt"
+    # prompt: "@./prompts/guild.txt"
     channels:
       "123456789012345678":
+        # prompt: "@parent\nThis channel is for cat topics only."
         models:
           - model: boost
             trigger: "^!ai-boost"

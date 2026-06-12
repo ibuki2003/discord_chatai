@@ -10,9 +10,11 @@
     "jsr:@std/encoding@1": "1.0.10",
     "jsr:@std/fmt@1": "1.0.8",
     "jsr:@std/fs@1": "1.0.8",
+    "jsr:@std/internal@^1.0.10": "1.0.12",
     "jsr:@std/path@0.217": "0.217.0",
-    "jsr:@std/path@1": "1.0.8",
-    "jsr:@std/path@^1.0.8": "1.0.8",
+    "jsr:@std/path@1": "1.1.2",
+    "jsr:@std/path@^1.0.8": "1.1.2",
+    "jsr:@std/path@^1.0.9": "1.1.2",
     "jsr:@std/yaml@^1.0.11": "1.0.12",
     "npm:@discordeno/bot@21.0.0": "21.0.0",
     "npm:@openrouter/sdk@*": "0.12.16",
@@ -60,6 +62,9 @@
         "jsr:@std/path@^1.0.8"
       ]
     },
+    "@std/internal@1.0.12": {
+      "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
+    },
     "@std/path@0.217.0": {
       "integrity": "1217cc25534bca9a2f672d7fe7c6f356e4027df400c0e85c0ef3e4343bc67d11",
       "dependencies": [
@@ -68,6 +73,12 @@
     },
     "@std/path@1.0.8": {
       "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
+    },
+    "@std/path@1.1.2": {
+      "integrity": "c0b13b97dfe06546d5e16bf3966b1cadf92e1cc83e56ba5476ad8b498d9e3038",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
     },
     "@std/yaml@1.0.12": {
       "integrity": "7deabca4545bcedd07c5f69ea53acea71b8b4c67562f224e17b90d75944cb20c"
@@ -204,6 +215,7 @@
       "jsr:@db/sqlite@0.12",
       "jsr:@openai/openai@^6.32.0",
       "jsr:@std/datetime@~0.225.4",
+      "jsr:@std/path@^1.0.9",
       "jsr:@std/yaml@^1.0.11",
       "npm:@discordeno/bot@21.0.0",
       "npm:@openrouter/sdk@*",

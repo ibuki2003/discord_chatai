@@ -1,4 +1,5 @@
 import { parse } from "@std/yaml";
+import { dirname, fromFileUrl, resolve } from "@std/path";
 import { z } from "@zod/zod";
 
 export type Provider = "openai" | "openrouter";
@@ -16,6 +17,7 @@ export type ModelRoute = {
 
 export type ChannelConfig = {
   models: ModelRoute[];
+  prompt?: string;
 };
 
 export type GuildConfig = {
@@ -52,6 +54,7 @@ const ModelRouteSchema = z.object({
 
 const ChannelConfigSchema = z.object({
   models: z.array(ModelRouteSchema).min(1),
+  prompt: z.string().optional(),
 });
 
 const GuildConfigSchema = z.object({
@@ -64,6 +67,34 @@ const ConfigSchema = z.object({
   guilds: z.record(z.string(), GuildConfigSchema).default({}),
   system_prompt: z.string().optional(),
 });
+
+const CONFIG_DIR = dirname(fromFileUrl(import.meta.url));
+
+// Resolve @directives in a prompt string.
+// @./path or @/path: inline file contents.
+// @parent: kept as-is for runtime resolution.
+// anything else: fatal error.
+function resolvePromptDirectives(text: string): string {
+  return text.replace(/@(\S+)/g, (match, directive: string) => {
+    if (directive.startsWith(".") || directive.startsWith("/")) {
+      const filePath = resolve(CONFIG_DIR, directive);
+      try {
+        return Deno.readTextFileSync(filePath);
+      } catch {
+        console.error(`config.yaml: prompt file not found: ${filePath}`);
+        Deno.exit(1);
+      }
+    }
+    if (directive === "parent") return match;
+    console.error(`config.yaml: unknown prompt directive: @${directive}`);
+    Deno.exit(1);
+  });
+}
+
+// Resolve @parent in a prompt by substituting the parent prompt.
+export function resolveParentPrompt(prompt: string, parent: string): string {
+  return prompt.replace("@parent", parent);
+}
 
 function loadConfig(): Config {
   let text: string;
@@ -85,8 +116,18 @@ function loadConfig(): Config {
     Deno.exit(1);
   }
 
+  // Resolve file directives in all prompt fields
+  if (result.data.system_prompt) {
+    result.data.system_prompt = resolvePromptDirectives(
+      result.data.system_prompt,
+    );
+  }
   for (const [guildId, guild] of Object.entries(result.data.guilds)) {
+    if (guild.prompt) guild.prompt = resolvePromptDirectives(guild.prompt);
     for (const [channelId, channel] of Object.entries(guild.channels)) {
+      if (channel.prompt) {
+        channel.prompt = resolvePromptDirectives(channel.prompt);
+      }
       for (const route of channel.models) {
         if (!result.data.models[route.model]) {
           console.error(
