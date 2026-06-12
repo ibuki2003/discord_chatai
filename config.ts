@@ -68,13 +68,32 @@ const ConfigSchema = z.object({
   system_prompt: z.string().optional(),
 });
 
+export const DEFAULT_SYSTEM_PROMPT = `
+# 指示
+あなたはグループチャットに参加しているAIです。名前は「AI」と呼ばれます。
+フレンドリーな性格で振る舞ってください。
+ユーザーの発言に対して、必要ならば返答してください。参考として、過去の会話履歴もユーザー名とともに与えられます。
+
+返答を作成するとき、過去に保存された長期記憶の情報を参照することができます。
+また、長期記憶は今後の返答に活用するため、必要に応じて更新してください。
+ユーザーの要求に応じて、または自分で必要と判断した場合、長期記憶を更新することができます。
+記憶の更新は、返答を作成した後に行ってください。
+
+# 長期記憶
+
+{{MEMORY}}
+
+# 過去の会話履歴
+
+{{HISTORY}}
+`;
+
 const CONFIG_DIR = dirname(fromFileUrl(import.meta.url));
 
-// Resolve @directives in a prompt string.
-// @./path or @/path: inline file contents.
-// @parent: kept as-is for runtime resolution.
-// anything else: fatal error.
-function resolvePromptDirectives(text: string): string {
+// Resolve @./path and @/path directives by inlining file contents.
+// @parent is left as-is for the parent-chain resolution step.
+// Any other @directive is a fatal error.
+function resolveFileDirectives(text: string): string {
   return text.replace(/@(\S+)/g, (match, directive: string) => {
     if (directive.startsWith(".") || directive.startsWith("/")) {
       const filePath = resolve(CONFIG_DIR, directive);
@@ -89,11 +108,6 @@ function resolvePromptDirectives(text: string): string {
     console.error(`config.yaml: unknown prompt directive: @${directive}`);
     Deno.exit(1);
   });
-}
-
-// Resolve @parent in a prompt by substituting the parent prompt.
-export function resolveParentPrompt(prompt: string, parent: string): string {
-  return prompt.replace("@parent", parent);
 }
 
 function loadConfig(): Config {
@@ -116,17 +130,15 @@ function loadConfig(): Config {
     Deno.exit(1);
   }
 
-  // Resolve file directives in all prompt fields
+  // Step 1: resolve @file directives in all prompt fields
   if (result.data.system_prompt) {
-    result.data.system_prompt = resolvePromptDirectives(
-      result.data.system_prompt,
-    );
+    result.data.system_prompt = resolveFileDirectives(result.data.system_prompt);
   }
   for (const [guildId, guild] of Object.entries(result.data.guilds)) {
-    if (guild.prompt) guild.prompt = resolvePromptDirectives(guild.prompt);
+    if (guild.prompt) guild.prompt = resolveFileDirectives(guild.prompt);
     for (const [channelId, channel] of Object.entries(guild.channels)) {
       if (channel.prompt) {
-        channel.prompt = resolvePromptDirectives(channel.prompt);
+        channel.prompt = resolveFileDirectives(channel.prompt);
       }
       for (const route of channel.models) {
         if (!result.data.models[route.model]) {
@@ -135,6 +147,21 @@ function loadConfig(): Config {
           );
           Deno.exit(1);
         }
+      }
+    }
+  }
+
+  // Step 2: resolve @parent chain (global → guild → channel)
+  const globalPrompt = result.data.system_prompt ?? DEFAULT_SYSTEM_PROMPT;
+  for (const guild of Object.values(result.data.guilds)) {
+    const guildPrompt = guild.prompt
+      ? guild.prompt.replace("@parent", globalPrompt)
+      : undefined;
+    if (guild.prompt) guild.prompt = guildPrompt;
+    const parentForChannel = guildPrompt ?? globalPrompt;
+    for (const channel of Object.values(guild.channels)) {
+      if (channel.prompt) {
+        channel.prompt = channel.prompt.replace("@parent", parentForChannel);
       }
     }
   }

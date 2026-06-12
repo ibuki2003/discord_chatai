@@ -2,9 +2,9 @@ import { bot, Message } from "./discord.ts";
 import {
   channelMap,
   config,
+  DEFAULT_SYSTEM_PROMPT,
   type ModelConfig,
   type ModelRoute,
-  resolveParentPrompt,
 } from "./config.ts";
 import { getChatMemory, setChatMemory } from "./db.ts";
 import { run_llm, type ToolDefinition, type UserTurnContent } from "./llm.ts";
@@ -18,25 +18,6 @@ const HISTORY_LINE_MAX = 3000;
 const HISTORY_ALL_MAX = 3000;
 const MY_NAME = "AI";
 
-const SYSTEM_PROMPT = `
-# 指示
-あなたはグループチャットに参加しているAIです。名前は「AI」と呼ばれます。
-フレンドリーな性格で振る舞ってください。
-ユーザーの発言に対して、必要ならば返答してください。参考として、過去の会話履歴もユーザー名とともに与えられます。
-
-返答を作成するとき、過去に保存された長期記憶の情報を参照することができます。
-また、長期記憶は今後の返答に活用するため、必要に応じて更新してください。
-ユーザーの要求に応じて、または自分で必要と判断した場合、長期記憶を更新することができます。
-記憶の更新は、返答を作成した後に行ってください。
-
-# 長期記憶
-
-{{MEMORY}}
-
-# 過去の会話履歴
-
-{{HISTORY}}
-`;
 
 type MyMsg = { author: string; content: string; date: Date };
 
@@ -118,16 +99,11 @@ function buildSystemPrompt(state: ChannelState): string {
     .map((val, idx) => `${idx}: ${val}`)
     .join("\n") || "(何も記憶していません)";
 
-  const globalPrompt = config.system_prompt ?? SYSTEM_PROMPT;
-  const guildPromptRaw = config.guilds[state.guildId]?.prompt;
-  const guildPrompt = guildPromptRaw
-    ? resolveParentPrompt(guildPromptRaw, globalPrompt)
-    : globalPrompt;
-  const channelPromptRaw =
-    channelMap.get(state.channelId)?.channelCfg.prompt;
-  const prompt = channelPromptRaw
-    ? resolveParentPrompt(channelPromptRaw, guildPrompt)
-    : guildPrompt;
+  // @parent and @file directives are already resolved at config load time
+  const globalPrompt = config.system_prompt ?? DEFAULT_SYSTEM_PROMPT;
+  const guildPrompt = config.guilds[state.guildId]?.prompt ?? globalPrompt;
+  const prompt =
+    channelMap.get(state.channelId)?.channelCfg.prompt ?? guildPrompt;
 
   return prompt
     .replace("{{MEMORY}}", memoryStr)
