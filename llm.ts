@@ -155,6 +155,9 @@ async function* run_chat_completion(
         model: modelConfig.name,
         messages,
         ...(all_tools.length > 0 ? { tools: all_tools, tool_choice: "auto" } : {}),
+        ...(modelConfig.reasoning_effort
+          ? { reasoning: { effort: modelConfig.reasoning_effort } }
+          : {}),
         stream: false,
       },
     });
