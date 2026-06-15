@@ -9,6 +9,12 @@ models:
   haiku:
     name: "anthropic/claude-3-haiku"
     provider: "openrouter"
+  haiku-search:
+    name: "anthropic/claude-3-haiku"
+    provider: "openrouter"
+    openrouter:
+      server_tools:
+        - type: "openrouter:web_search"
 
 # Prompts support @directives:
 #   @./path/to/file or @/abs/path  -- inline file contents

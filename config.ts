@@ -4,10 +4,26 @@ import { z } from "@zod/zod";
 
 export type Provider = "openai" | "openrouter";
 
+export type OpenRouterServerTool = {
+  type: "openrouter:web_search";
+  parameters?: {
+    engine?: "auto" | "native" | "exa" | "firecrawl" | "parallel" | "perplexity";
+    max_results?: number;
+    max_total_results?: number;
+    search_context_size?: "low" | "medium" | "high";
+    max_characters?: number;
+  };
+};
+
+export type OpenRouterConfig = {
+  server_tools?: OpenRouterServerTool[];
+};
+
 export type ModelConfig = {
   name: string;
   provider: Provider;
   reasoning_effort?: "low" | "medium" | "high";
+  openrouter?: OpenRouterConfig;
 };
 
 export type ModelRoute = {
@@ -31,10 +47,26 @@ export type Config = {
   system_prompt?: string;
 };
 
+const OpenRouterServerToolSchema = z.object({
+  type: z.literal("openrouter:web_search"),
+  parameters: z.object({
+    engine: z.enum(["auto", "native", "exa", "firecrawl", "parallel", "perplexity"]).optional(),
+    max_results: z.number().int().min(1).max(25).optional(),
+    max_total_results: z.number().int().min(1).optional(),
+    search_context_size: z.enum(["low", "medium", "high"]).optional(),
+    max_characters: z.number().int().min(1).max(100000).optional(),
+  }).optional(),
+});
+
+const OpenRouterConfigSchema = z.object({
+  server_tools: z.array(OpenRouterServerToolSchema).optional(),
+});
+
 const ModelConfigSchema = z.object({
   name: z.string(),
   provider: z.enum(["openai", "openrouter"]),
   reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+  openrouter: OpenRouterConfigSchema.optional(),
 });
 
 const ModelRouteSchema = z.object({

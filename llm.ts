@@ -118,11 +118,16 @@ async function* run_chat_completion(
   modelConfig: ModelConfig,
   tools?: Record<string, ToolDefinition>,
 ): AsyncGenerator<ResultItem> {
-  const tool_schemas = tools
+  const tool_schemas: ChatFunctionToolFunction[] | undefined = tools
     ? Object.values(tools).map((t) =>
       t.schema as unknown as ChatFunctionToolFunction
     )
     : undefined;
+
+  const all_tools = [
+    ...(tool_schemas ?? []),
+    ...(modelConfig.openrouter?.server_tools ?? []),
+  ] as unknown as ChatFunctionToolFunction[];
 
   const messages: ChatMessages[] = [
     { role: "system", content: systemPrompt },
@@ -149,7 +154,7 @@ async function* run_chat_completion(
       chatRequest: {
         model: modelConfig.name,
         messages,
-        ...(tool_schemas ? { tools: tool_schemas, tool_choice: "auto" } : {}),
+        ...(all_tools.length > 0 ? { tools: all_tools, tool_choice: "auto" } : {}),
         stream: false,
       },
     });
