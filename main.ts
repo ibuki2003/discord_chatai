@@ -7,11 +7,7 @@ import {
   type ModelRoute,
 } from "./config.ts";
 import { getChatMemory, setChatMemory } from "./db.ts";
-import {
-  LlmMessage,
-  run_llm,
-  type ToolDefinition,
-} from "./llm.ts";
+import { LlmMessage, run_llm, type ToolDefinition } from "./llm.ts";
 import { splitForDiscord } from "./util.ts";
 import { format } from "@std/datetime/format";
 import { AsyncValue } from "@core/asyncutil/async-value";
@@ -236,8 +232,10 @@ function formatRawMessage(
   });
 
   const date = message.timestamp ? new Date(message.timestamp) : new Date();
-  const username = message.member?.nick ??
-    nickCache.get(message.author.id.toString()) ?? message.author.username;
+  const username = message.author?.id === bot.id
+    ? null
+    : message.member?.nick ??
+      nickCache.get(message.author.id.toString()) ?? message.author.username;
   return {
     author: username,
     timestamp: formatDate(date),
