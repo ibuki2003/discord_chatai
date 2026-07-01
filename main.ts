@@ -7,24 +7,30 @@ import {
   type ModelRoute,
 } from "./config.ts";
 import { getChatMemory, setChatMemory } from "./db.ts";
-import { run_llm, type ToolDefinition, type UserTurnContent } from "./llm.ts";
+import {
+  LlmMessage,
+  run_llm,
+  type ToolDefinition,
+} from "./llm.ts";
 import { splitForDiscord } from "./util.ts";
 import { format } from "@std/datetime/format";
 import { AsyncValue } from "@core/asyncutil/async-value";
 import { Lock } from "@core/asyncutil/lock";
+import { OpenAI } from "openai";
 
 const HISTORY_SIZE = 50;
-const HISTORY_LINE_MAX = 3000;
-const HISTORY_ALL_MAX = 3000;
-const MY_NAME = "AI";
+const HISTORY_ALL_MAX = 30000;
 
-
-type MyMsg = { author: string; content: string; date: Date };
+interface MyMsg {
+  author: string | null; // null if message is from AI
+  content: string;
+  timestamp: string;
+}
 
 type ChannelState = {
   guildId: string;
   channelId: string;
-  history: string[];
+  history: MyMsg[];
   memory: string[];
   nickCache: Map<string, string>;
 };
@@ -56,13 +62,13 @@ async function refreshHistory(state: ChannelState): Promise<void> {
       state.nickCache.set(member.user.id.toString(), member.nick);
     }
   }
-  state.nickCache.set(bot.id.toString(), MY_NAME);
+  // state.nickCache.set(bot.id.toString(), MY_NAME);
 
   const history = await bot.helpers.getMessages(state.channelId, {
     limit: HISTORY_SIZE,
   })
     .then((messages) =>
-      messages.map((message) => formatMessage(message, state.nickCache))
+      messages.map((message) => formatRawMessage(message, state.nickCache))
     )
     .then((messages) => messages.reverse())
     .catch(() => []);
@@ -70,7 +76,7 @@ async function refreshHistory(state: ChannelState): Promise<void> {
   trimHistory(state);
 }
 
-function addMessage(state: ChannelState, message: Message | MyMsg): void {
+function addRawMessage(state: ChannelState, message: Message): void {
   if ("member" in message && message.author.id !== bot.id) {
     if (message.member?.nick) {
       state.nickCache.set(message.author.id.toString(), message.member.nick);
@@ -78,7 +84,7 @@ function addMessage(state: ChannelState, message: Message | MyMsg): void {
       state.nickCache.delete(message.author.id.toString());
     }
   }
-  state.history.push(formatMessage(message, state.nickCache));
+  state.history.push(formatRawMessage(message, state.nickCache));
   trimHistory(state);
 }
 
@@ -90,7 +96,7 @@ function trimHistory(state: ChannelState): void {
   while (length > HISTORY_ALL_MAX) {
     const e = state.history.shift();
     if (!e) break;
-    length -= e.length;
+    length -= e.content.length;
   }
 }
 
@@ -102,12 +108,11 @@ function buildSystemPrompt(state: ChannelState): string {
   // @parent and @file directives are already resolved at config load time
   const globalPrompt = config.system_prompt ?? DEFAULT_SYSTEM_PROMPT;
   const guildPrompt = config.guilds[state.guildId]?.prompt ?? globalPrompt;
-  const prompt =
-    channelMap.get(state.channelId)?.channelCfg.prompt ?? guildPrompt;
+  const prompt = channelMap.get(state.channelId)?.channelCfg.prompt ??
+    guildPrompt;
 
   return prompt
-    .replace("{{MEMORY}}", memoryStr)
-    .replace("{{HISTORY}}", state.history.slice(0, -1).join("\n"));
+    .replace("{{MEMORY}}", memoryStr);
 }
 
 function makeMemoryTools(state: ChannelState): Record<string, ToolDefinition> {
@@ -210,15 +215,11 @@ function selectModel(
 
 const formatDate = (date: Date): string => format(date, "yyyy/MM/dd HH:mm:ss");
 
-function formatMessage(
-  message: Message | MyMsg,
+function formatRawMessage(
+  message: Message,
   nickCache: Map<string, string>,
-): string {
+): MyMsg {
   let content = message.content;
-
-  if ("date" in message) {
-    return `[${formatDate(message.date)}] ${message.author}: ${content}`;
-  }
 
   const mentionsNicks = message.mentions?.map((mention) => [
     mention.id.toString(),
@@ -237,10 +238,11 @@ function formatMessage(
   const date = message.timestamp ? new Date(message.timestamp) : new Date();
   const username = message.member?.nick ??
     nickCache.get(message.author.id.toString()) ?? message.author.username;
-  return `[${formatDate(date)}] ${username}: ${content}`.substring(
-    0,
-    HISTORY_LINE_MAX,
-  );
+  return {
+    author: username,
+    timestamp: formatDate(date),
+    content,
+  };
 }
 
 bot.events.messageCreate = async (message) => {
@@ -272,7 +274,7 @@ bot.events.messageCreate = async (message) => {
     if (state.history.length === 0) {
       await refreshHistory(state);
     } else {
-      addMessage(state, message);
+      addRawMessage(state, message);
     }
 
     const modelConfig = selectModel(message.content, channelCfg.models);
@@ -285,20 +287,34 @@ bot.events.messageCreate = async (message) => {
       ...(message.attachments ?? []),
       ...(message.referencedMessage?.attachments ?? []),
     ];
-    const userTurn: UserTurnContent[] = [
-      { type: "text", text: state.history[state.history.length - 1] },
-      ...attachments
-        .filter((att) => att.contentType?.startsWith("image/"))
-        .map((att): UserTurnContent => ({
-          type: "image_url",
-          image_url: { url: att.url, detail: "auto" },
-        })),
-    ];
+    const messages: LlmMessage[] = state.history.map<LlmMessage>((msg) => (
+      msg.author === null
+        ? { role: "assistant", content: [{ type: "text", text: msg.content }] }
+        : {
+          role: "user",
+          content: [{
+            type: "text",
+            text: `${msg.timestamp} <${msg.author}> ${msg.content}`,
+          }],
+        }
+    ));
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user" && Array.isArray(messages[i].content)) {
+        (messages[i].content as OpenAI.ChatCompletionContentPart[]).push(
+          ...attachments
+            .filter((att) => att.contentType?.startsWith("image/"))
+            .map((att) => ({
+              type: "image_url" as const,
+              image_url: { url: att.url, detail: "auto" as const },
+            })),
+        );
+      }
+    }
 
     let outputText = "";
     try {
       for await (
-        const item of run_llm(userTurn, systemPrompt, modelConfig, tools)
+        const item of run_llm(messages, systemPrompt, modelConfig, tools)
       ) {
         if (item.type === "text") {
           outputText += item.content;
@@ -317,10 +333,10 @@ bot.events.messageCreate = async (message) => {
     }
 
     if (outputText) {
-      addMessage(state, {
-        author: MY_NAME,
+      state.history.push({
+        author: null,
         content: outputText,
-        date: new Date(),
+        timestamp: formatDate(new Date()),
       });
     }
   });

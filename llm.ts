@@ -7,6 +7,10 @@ import type {
 import { Secret } from "./secret.ts";
 import type { ModelConfig } from "./config.ts";
 
+type ChatCompletionItem = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+
+export type LlmMessage = ChatCompletionItem;
+
 export type ToolDefinition = {
   schema: OpenAI.Chat.Completions.ChatCompletionFunctionTool;
   callback: (argsJson: string) => Promise<string>;
@@ -29,17 +33,17 @@ const openrouter_client = new OpenRouter({
 });
 
 export async function* run_llm(
-  userTurn: UserTurnContent[],
+  input: ChatCompletionItem[],
   systemPrompt: string,
   modelConfig: ModelConfig,
   tools?: Record<string, ToolDefinition>,
 ): AsyncGenerator<ResultItem> {
   switch (modelConfig.provider) {
     case "openai":
-      yield* run_responses_api(userTurn, systemPrompt, modelConfig, tools);
+      yield* run_responses_api(input, systemPrompt, modelConfig, tools);
       break;
     case "openrouter":
-      yield* run_chat_completion(userTurn, systemPrompt, modelConfig, tools);
+      yield* run_chat_completion(input, systemPrompt, modelConfig, tools);
       break;
     default:
       throw new Error(
@@ -51,7 +55,7 @@ export async function* run_llm(
 }
 
 async function* run_responses_api(
-  userTurn: UserTurnContent[],
+  input: ChatCompletionItem[],
   systemPrompt: string,
   modelConfig: ModelConfig,
   tools?: Record<string, ToolDefinition>,
@@ -60,27 +64,13 @@ async function* run_responses_api(
     ? Object.values(tools).map((t) => convert_tool_to_responses(t.schema))
     : undefined;
 
-  const input: OpenAI.Responses.ResponseInputItem[] = [
-    {
-      type: "message",
-      role: "user",
-      content: userTurn.map((item): OpenAI.Responses.ResponseInputContent => {
-        if (item.type === "text") {
-          return { type: "input_text", text: item.text };
-        } else {
-          return {
-            type: "input_image",
-            image_url: item.image_url.url,
-            detail: item.image_url.detail,
-          };
-        }
-      }),
-    },
-  ];
+  const input_resp: OpenAI.Responses.ResponseInputItem[] = input.map(
+    convert_item_to_responses,
+  ).flat();
 
   const response = await openai_client.responses.create({
     instructions: systemPrompt,
-    input,
+    input: input_resp,
     model: modelConfig.name,
     store: false,
     ...(tool_schemas
@@ -113,7 +103,7 @@ async function* run_responses_api(
 }
 
 async function* run_chat_completion(
-  userTurn: UserTurnContent[],
+  input: ChatCompletionItem[],
   systemPrompt: string,
   modelConfig: ModelConfig,
   tools?: Record<string, ToolDefinition>,
@@ -131,22 +121,7 @@ async function* run_chat_completion(
 
   const messages: ChatMessages[] = [
     { role: "system", content: systemPrompt },
-    {
-      role: "user",
-      content: userTurn.map((item) => {
-        if (item.type === "text") {
-          return { type: "text" as const, text: item.text };
-        } else {
-          return {
-            type: "image_url" as const,
-            imageUrl: {
-              url: item.image_url.url,
-              detail: item.image_url.detail,
-            },
-          };
-        }
-      }),
-    },
+    ...(input as unknown as ChatMessages[]), // openai and openrouter incompatibility (but it works)
   ];
 
   while (true) {
@@ -154,7 +129,9 @@ async function* run_chat_completion(
       chatRequest: {
         model: modelConfig.name,
         messages,
-        ...(all_tools.length > 0 ? { tools: all_tools, tool_choice: "auto" } : {}),
+        ...(all_tools.length > 0
+          ? { tools: all_tools, tool_choice: "auto" }
+          : {}),
         ...(modelConfig.reasoning_effort
           ? { reasoning: { effort: modelConfig.reasoning_effort } }
           : {}),
@@ -196,6 +173,90 @@ async function* run_chat_completion(
       );
     }
   }
+}
+
+function convert_item_to_responses(
+  item: ChatCompletionItem,
+): OpenAI.Responses.ResponseInputItem[] {
+  // ensure content is an array
+  const content = item.content
+    ? Array.isArray(item.content) ? item.content : [item.content]
+    : [];
+
+  const result: OpenAI.Responses.ResponseInputItem[] = [];
+
+  switch (item.role) {
+    case "developer":
+    case "system":
+    case "user":
+    case "assistant":
+      result.push(
+        <OpenAI.Responses.EasyInputMessage> {
+          type: "message",
+          role: item.role,
+          content: content.map((c): OpenAI.Responses.ResponseInputContent => {
+            // NOTE: TypeScript annotation allows only "input_text"
+            // but openai api will only accept "output_text" for assistant messages
+            const text_type = (item.role === "assistant"
+              ? "output_text"
+              : "input_text") as "input_text";
+            if (typeof c === "string") {
+              return { type: text_type, text: c };
+            } else {
+              switch (c.type) {
+                case "text":
+                  return { type: text_type, text: c.text };
+
+                case "image_url":
+                  return {
+                    type: "input_image",
+                    image_url: c.image_url.url,
+                    detail: c.image_url.detail ?? "auto",
+                  };
+
+                case "input_audio":
+                case "file":
+                case "refusal":
+                  throw new Error(
+                    `Unsupported content type in Responses API: ${c.type}`,
+                  );
+              }
+            }
+          }),
+        },
+      );
+
+      if (item.role === "assistant" && item.tool_calls) {
+        for (const call of item.tool_calls) {
+          if (call.type !== "function") continue;
+          result.push({
+            type: "function_call",
+            name: call.function.name,
+            arguments: call.function.arguments,
+            call_id: call.id,
+          });
+        }
+      }
+      break;
+
+    case "tool":
+      result.push({
+        type: "function_call_output",
+        call_id: item.tool_call_id,
+        output: content.map((c) => ({
+          type: "input_text",
+          text: typeof c === "string"
+            ? c
+            : (c as OpenAI.Chat.Completions.ChatCompletionContentPartText)
+              .text,
+        })),
+      });
+      break;
+
+    default:
+      // return [];
+  }
+  return result;
 }
 
 function convert_tool_to_responses(
